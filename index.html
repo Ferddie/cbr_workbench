@@ -1,0 +1,1142 @@
+<title>CBR Workbench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Case-based reasoning on your own Excel knowledge bank: set weights, retrieve the most similar cases, download the results.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@500;700;800&display=swap">
+<style>
+/* Layout: a working column of five CBR steps beside a narrow reference rail; results tables scroll inside their own frames. */
+:root {
+  --bg: #f1f5f5;
+  --surface: #ffffff;
+  --surface-2: #e6eeee;
+  --ink: #132a2e;
+  --ink-2: #4c6468;
+  --line: #d0dcdc;
+  --primary: #1f4e5f;
+  --on-primary: #ffffff;
+  --accent: #96580a;
+  --accent-soft: #f6e6cc;
+  --on-accent-soft: #5a3500;
+  --heat: #2b8a9c;
+  --ok: #1d7a4c;
+  --warn: #9a5b00;
+  --danger: #a3332b;
+  --focus: #e0951f;
+  --font-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --step-0: 0.8125rem;
+  --step-1: 0.9375rem;
+  --step-2: 1.125rem;
+  --step-3: 1.5rem;
+  --step-4: 2.125rem;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1719; --surface: #142124; --surface-2: #1b2c30; --ink: #e2ecec; --ink-2: #9bb1b4;
+    --line: #2a3e42; --primary: #6cbccc; --on-primary: #06191d; --accent: #e9a63f; --accent-soft: #3a2a10;
+    --on-accent-soft: #f6d9a8; --heat: #58b2c4; --ok: #5cc48f; --warn: #e9b35f; --danger: #ef8a80; --focus: #f0b45a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1719; --surface: #142124; --surface-2: #1b2c30; --ink: #e2ecec; --ink-2: #9bb1b4;
+  --line: #2a3e42; --primary: #6cbccc; --on-primary: #06191d; --accent: #e9a63f; --accent-soft: #3a2a10;
+  --on-accent-soft: #f6d9a8; --heat: #58b2c4; --ok: #5cc48f; --warn: #e9b35f; --danger: #ef8a80; --focus: #f0b45a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-1);
+  line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.15; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.num, td.n, .mono { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+.page { max-width: 1240px; margin: 0 auto; display: grid; gap: 28px; }
+.masthead { display: grid; gap: 10px; }
+.brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.brand h1 { font-size: var(--step-4); font-weight: 800; letter-spacing: -0.02em; }
+.brand .cycle { font-family: var(--font-data); font-size: var(--step-0); color: var(--ink-2); letter-spacing: 0.04em; }
+.masthead p { max-width: 68ch; color: var(--ink-2); }
+.privacy { display: inline-flex; align-items: center; gap: 8px; font-size: var(--step-0); color: var(--ink-2); }
+.privacy::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; }
+@media (max-width: 1080px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.steps { display: grid; gap: 20px; min-width: 0; }
+
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+#results, #retain, #bank-summary, #weights { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+.step-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.step-no { font-family: var(--font-data); font-size: var(--step-0); color: var(--on-primary); background: var(--primary); border-radius: 4px; padding: 1px 7px; }
+.step-head h2 { font-size: var(--step-3); font-weight: 700; }
+.phase { font-family: var(--font-data); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+.hint { color: var(--ink-2); font-size: var(--step-0); }
+
+.row { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: end; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field > span { font-size: var(--step-0); font-weight: 700; color: var(--ink-2); }
+.field small { color: var(--ink-2); font-size: 0.75rem; font-family: var(--font-data); }
+input[type="text"], input[type="number"], select {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; min-height: 38px; width: 100%;
+}
+input[type="number"] { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+select { cursor: pointer; }
+
+.btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 6px; padding: 8px 16px; min-height: 40px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); font-weight: 700; }
+.btn:hover { border-color: var(--primary); }
+.btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.danger { color: var(--danger); }
+
+.source { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; padding: 3px; background: var(--surface-2); gap: 3px; }
+.seg button { border: 0; background: transparent; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: var(--step-0); font-weight: 700; color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+
+.drop { position: relative; border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 6px; justify-items: start; background: var(--bg); }
+.drop.over { border-color: var(--primary); background: var(--surface-2); }
+.drop label.btn { cursor: pointer; }
+.drop input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.facts { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.fact { display: grid; }
+.fact b { font-family: var(--font-data); font-size: var(--step-3); font-weight: 500; line-height: 1.1; }
+.fact span { font-size: var(--step-0); color: var(--ink-2); }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--on-accent-soft); font-weight: 700; }
+
+details.peek > summary { cursor: pointer; font-weight: 700; color: var(--primary); }
+details.peek[open] > summary { margin-bottom: 10px; }
+
+.frame { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; max-height: 460px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; font-size: var(--step-0); }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+thead th { position: sticky; top: 0; background: var(--surface-2); font-family: var(--font-display); font-weight: 700; z-index: 1; }
+td.n, th.n { text-align: right; }
+tbody tr:last-child td { border-bottom: 0; }
+th.unused, td.unused { color: var(--ink-2); opacity: 0.6; }
+th .sub { display: block; font-family: var(--font-data); font-weight: 400; font-size: 0.6875rem; color: var(--ink-2); }
+
+/* Criteria and weights */
+.weights { display: grid; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.wrow { display: grid; grid-template-columns: minmax(140px, 1.3fr) 150px minmax(120px, 1fr) 84px 64px; gap: 12px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.wrow:last-child { border-bottom: 0; }
+.wrow.head { background: var(--surface-2); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: var(--ink-2); padding-block: 7px; }
+.wrow.off .wname { color: var(--ink-2); }
+.wname { font-weight: 700; overflow-wrap: anywhere; }
+.wname small { display: block; font-weight: 400; font-size: 0.75rem; color: var(--ink-2); font-family: var(--font-data); }
+.weff { font-family: var(--font-data); font-size: var(--step-0); text-align: right; color: var(--ink-2); }
+input[type="range"] { width: 100%; accent-color: var(--primary); }
+.wtotal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 9px 12px; background: var(--surface-2); font-size: var(--step-0); }
+.wtotal b { font-family: var(--font-data); }
+.wtotal.bad { color: var(--danger); }
+@media (max-width: 640px) {
+  .wrow { grid-template-columns: 1fr 84px; grid-template-areas: "name name" "type eff" "slider num"; }
+  .wrow.head { display: none; }
+  .wrow > .wname { grid-area: name; }
+  .wrow > .wtype { grid-area: type; }
+  .wrow > .wslider { grid-area: slider; }
+  .wrow > .wnum { grid-area: num; }
+  .wrow > .weff { grid-area: eff; }
+}
+
+.qgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px 16px; }
+.runbar { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: end; padding-top: 4px; border-top: 1px solid var(--line); padding-block: 14px 0; }
+.runbar .field { width: 150px; }
+
+/* Results */
+.reuse { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 20px; align-items: center; padding: 16px 18px; border-radius: 8px; background: var(--accent-soft); color: var(--on-accent-soft); }
+@media (max-width: 640px) { .reuse { grid-template-columns: minmax(0, 1fr); } }
+.reuse .label { font-family: var(--font-data); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.reuse .solution { font-family: var(--font-display); font-weight: 800; font-size: var(--step-3); line-height: 1.15; overflow-wrap: anywhere; }
+.reuse .from { font-size: var(--step-0); }
+.reuse .score { font-family: var(--font-data); font-size: var(--step-4); font-weight: 500; line-height: 1; text-align: right; }
+.reuse .score small { display: block; font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: var(--step-0); background: var(--surface); }
+.chip b { font-family: var(--font-data); font-weight: 500; }
+.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center; }
+.simcell { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.bar { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; min-width: 60px; }
+.bar i { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
+tr.best td { font-weight: 700; }
+tr.best .bar i { background: var(--accent); }
+.best-tag { font-size: 0.6875rem; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: var(--surface); margin-left: 6px; font-family: var(--font-data); font-weight: 500; }
+.legend { display: inline-flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--ink-2); }
+.legend i { width: 72px; height: 10px; border-radius: 3px; border: 1px solid var(--line); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--heat) 38%, transparent)); }
+
+.status { font-size: var(--step-0); min-height: 1.2em; }
+.status.ok { color: var(--ok); }
+.status.warn { color: var(--warn); }
+.status.err { color: var(--danger); }
+.notice { padding: 12px 14px; border-radius: 8px; background: var(--surface-2); font-size: var(--step-0); }
+.notice.err { color: var(--danger); }
+.empty { padding: 22px; border: 1px dashed var(--line); border-radius: 8px; color: var(--ink-2); text-align: center; }
+
+/* Reference rail */
+.rail { position: sticky; top: max(16px, env(safe-area-inset-top, 0px)); display: grid; gap: 16px; min-width: 0; }
+@media (max-width: 1080px) { .rail { position: static; } }
+.card { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; background: var(--surface); }
+.card h3 { font-size: var(--step-2); }
+.formula { display: grid; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+.formula:first-of-type { border-top: 0; padding-top: 0; }
+.formula .name { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-2); font-weight: 700; }
+.math { font-family: var(--font-data); font-size: var(--step-0); line-height: 2.2; }
+.frac { display: inline-grid; vertical-align: middle; text-align: center; line-height: 1.25; margin: 0 2px; }
+.frac > span:first-child { border-bottom: 1px solid currentColor; padding: 0 3px; }
+.formula p { font-size: 0.8125rem; color: var(--ink-2); }
+.cycle-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; counter-reset: c; }
+.cycle-list li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; font-size: var(--step-0); }
+.cycle-list li::before { counter-increment: c; content: counter(c); font-family: var(--font-data); width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); font-size: 0.75rem; }
+.cycle-list b { font-family: var(--font-display); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .bar i { transition: width 0.25s ease; }
+}
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <div class="brand">
+      <h1>CBR Workbench</h1>
+      <span class="cycle">RETRIEVE · REUSE · REVISE · RETAIN</span>
+    </div>
+    <p>Find the past cases most similar to a new problem, using your own Excel knowledge bank and the weights you choose.</p>
+    <span class="privacy">Files are read in your browser and are never uploaded.</span>
+  </header>
+
+  <div class="layout">
+    <main class="steps">
+      <!-- 1. Knowledge bank -->
+      <section class="step" id="step-bank" aria-labelledby="h-bank">
+        <div class="step-head"><span class="step-no">1</span><h2 id="h-bank">Knowledge bank</h2><span class="phase">Case base</span></div>
+        <div class="seg" role="group" aria-label="Data source">
+          <button type="button" id="src-sample" aria-pressed="true">Sample dataset</button>
+          <button type="button" id="src-upload" aria-pressed="false">My own file</button>
+        </div>
+        <div id="sample-pane" class="row">
+          <label class="field" style="min-width: min(100%, 340px)"><span>Sample</span>
+            <select id="sample-select"></select>
+          </label>
+          <p class="hint" id="sample-note"></p>
+        </div>
+        <div id="upload-pane" hidden>
+          <div class="drop" id="drop">
+            <label class="btn primary" for="file-input">Choose an Excel or CSV file</label>
+            <input type="file" id="file-input" accept=".xlsx,.xlsm,.csv">
+            <p class="hint">Or drag the file here. First row = field names. Each following row = one past case, including its solution.</p>
+          </div>
+          <div class="row" id="sheet-row" hidden style="margin-top: 12px">
+            <label class="field" style="min-width: 220px"><span>Sheet</span><select id="sheet-select"></select></label>
+          </div>
+        </div>
+        <p class="status" id="bank-status" role="status" aria-live="polite"></p>
+        <div id="bank-summary"></div>
+      </section>
+
+      <!-- 2. Criteria and weights -->
+      <section class="step" id="step-weights" aria-labelledby="h-weights">
+        <div class="step-head"><span class="step-no">2</span><h2 id="h-weights">Criteria and weights</h2><span class="phase">Similarity model</span></div>
+        <div class="row">
+          <label class="field" style="flex: 1 1 240px"><span>Solution column</span>
+            <select id="solution-select"></select>
+            <small>The outcome to reuse. Not used for matching.</small>
+          </label>
+          <label class="field" style="flex: 1 1 240px"><span>Case ID column (optional)</span>
+            <select id="id-select"></select>
+            <small>A label for each case. Not used for matching.</small>
+          </label>
+        </div>
+        <p class="hint">Give each field the system found a weight from 0 to 100. A weight of 0 leaves the field out. Change the type if a number is really a category, such as a star rating.</p>
+        <div id="weights"></div>
+      </section>
+
+      <!-- 3. New case -->
+      <section class="step" id="step-query" aria-labelledby="h-query">
+        <div class="step-head"><span class="step-no">3</span><h2 id="h-query">New case</h2><span class="phase">Problem</span></div>
+        <p class="hint">Describe the new problem. Only weighted fields are asked for. Numbers start at the median of the stored cases and categories at the most common value.</p>
+        <div class="qgrid" id="query"></div>
+        <div class="runbar">
+          <label class="field"><span>Top N most similar</span>
+            <input type="number" id="topn" min="1" step="1" value="5">
+          </label>
+          <button type="button" class="btn primary" id="run">Find similar cases</button>
+          <p class="hint" id="topn-note"></p>
+        </div>
+      </section>
+
+      <!-- 4. Results -->
+      <section class="step" id="step-results" aria-labelledby="h-results">
+        <div class="step-head"><span class="step-no">4</span><h2 id="h-results">Most similar cases</h2><span class="phase">Retrieve and reuse</span></div>
+        <div id="results"><div class="empty">Set the weights and the new case, then choose <b>Find similar cases</b>.</div></div>
+      </section>
+
+      <!-- 5. Revise and retain -->
+      <section class="step" id="step-retain" aria-labelledby="h-retain">
+        <div class="step-head"><span class="step-no">5</span><h2 id="h-retain">Revise and retain</h2><span class="phase">Learn</span></div>
+        <p class="hint">Confirm or correct the suggested solution, then store the new case so later searches can reuse it. Added cases are kept until you reload the page.</p>
+        <div id="retain"><div class="empty">Run a search first.</div></div>
+      </section>
+    </main>
+
+    <aside class="rail" aria-label="Reference">
+      <div class="card">
+        <h3>How similarity is calculated</h3>
+        <div class="formula">
+          <span class="name">Local, categorical field</span>
+          <div class="math">sim(a, b) = 1 if a = b, otherwise 0</div>
+          <p>Capital letters and extra spaces are ignored.</p>
+        </div>
+        <div class="formula">
+          <span class="name">Local, numeric field</span>
+          <div class="math">sim(a, b) = 1 − <span class="frac"><span>|a − b|</span><span>range</span></span></div>
+          <p>range = highest minus lowest value of the field, including the new case, so every local similarity stays between 0 and 1.</p>
+        </div>
+        <div class="formula">
+          <span class="name">Global</span>
+          <div class="math">sim(A, B) = <span class="frac"><span>1</span><span>Σ w<sub>i</sub></span></span> · Σ w<sub>i</sub> · sim<sub>i</sub>(a, b)</div>
+          <p>a = new case value, b = stored value, w = field weight. A blank stored value scores 0 for that field.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h3>The CBR cycle here</h3>
+        <ol class="cycle-list">
+          <li><span><b>Retrieve</b> the stored cases closest to the new case.</span></li>
+          <li><span><b>Reuse</b> the solution of the most similar case.</span></li>
+          <li><span><b>Revise</b> that solution if it does not fit.</span></li>
+          <li><span><b>Retain</b> the confirmed case for future searches.</span></li>
+        </ol>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+<script id="cbr-engine">
+/* Case-based reasoning engine. Pure functions, no page access. */
+(function (root) {
+  "use strict";
+  const NUMERIC = "Numeric", CATEGORICAL = "Categorical";
+  const ID_HINTS = new Set(["id", "case id", "case_id", "caseid", "case", "case no", "case no.", "case #",
+    "case number", "no", "no.", "#", "record", "record id", "day"]);
+  const RESERVED = new Set(["Rank", "Case", "Similarity", "Global similarity"]);
+
+  function isMissing(v) {
+    return v === null || v === undefined || (typeof v === "number" && Number.isNaN(v)) ||
+      (typeof v === "string" && v.trim() === "");
+  }
+  function toNumber(v) {
+    if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
+    if (typeof v === "string") {
+      const t = v.trim();
+      if (t === "") return NaN;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : NaN;
+    }
+    return NaN;
+  }
+  function isNumericColumn(values) {
+    let any = false;
+    for (const v of values) {
+      if (isMissing(v)) continue;
+      if (typeof v === "boolean" || Number.isNaN(toNumber(v))) return false;
+      any = true;
+    }
+    return any;
+  }
+  function detectType(values) { return isNumericColumn(values) ? NUMERIC : CATEGORICAL; }
+  function label(v) {
+    if (isMissing(v)) return null;
+    if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+    return String(v).trim();
+  }
+  function key(v) { const l = label(v); return l === null ? null : l.toLowerCase(); }
+  function options(values) {
+    const seen = new Set(), out = [];
+    for (const v of values) {
+      const l = label(v);
+      if (l === null) continue;
+      const k = l.toLowerCase();
+      if (!seen.has(k)) { seen.add(k); out.push(l); }
+    }
+    return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }));
+  }
+  function mostCommon(values) {
+    const counts = new Map(), first = new Map();
+    for (const v of values) {
+      const k = key(v);
+      if (k === null) continue;
+      counts.set(k, (counts.get(k) || 0) + 1);
+      if (!first.has(k)) first.set(k, label(v));
+    }
+    let best = null, n = 0;
+    for (const [k, c] of counts) if (c > n) { best = k; n = c; }
+    return best === null ? null : first.get(best);
+  }
+  function numbers(values) { return values.map(toNumber).filter(x => !Number.isNaN(x)); }
+  function median(nums) {
+    if (!nums.length) return NaN;
+    const s = [...nums].sort((a, b) => a - b), m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+  function equalWeights(n) {
+    if (n <= 0) return [];
+    const base = Math.floor(100 / n), extra = 100 % n;
+    return Array.from({ length: n }, (_, i) => base + (i < extra ? 1 : 0));
+  }
+  function column(rows, name) { return rows.map(r => r[name]); }
+  function isUnique(values) {
+    const seen = new Set();
+    for (const v of values) {
+      const k = key(v);
+      if (k === null || seen.has(k)) return false;
+      seen.add(k);
+    }
+    return true;
+  }
+  function guessIdColumn(columns, rows, exclude) {
+    for (const c of columns) {
+      if (!exclude.has(c) && ID_HINTS.has(c.trim().toLowerCase()) && isUnique(column(rows, c))) return c;
+    }
+    const first = columns[0];
+    if (first !== undefined && !exclude.has(first)) {
+      const vals = column(rows, first).map(toNumber);
+      if (vals.length && vals.every((x, i) => x === i + 1)) return first;
+    }
+    return null;
+  }
+
+  /* Local and global similarity of every stored case to the new case. */
+  function retrieve(rows, query, fields) {
+    const active = fields.filter(f => f.weight > 0);
+    if (!active.length) throw new Error("Give at least one field a weight above 0.");
+    const total = active.reduce((s, f) => s + f.weight, 0);
+    const effective = {}, local = {}, ranges = {};
+    for (const f of active) effective[f.name] = f.weight / total;
+    for (const f of active) {
+      const q = query[f.name];
+      let sims;
+      if (f.type === NUMERIC) {
+        const a = toNumber(q);
+        const b = rows.map(r => toNumber(r[f.name]));
+        if (Number.isNaN(a)) {
+          sims = b.map(() => 0);
+          ranges[f.name] = null;
+        } else {
+          let lo = a, hi = a;
+          for (const x of b) if (!Number.isNaN(x)) { if (x < lo) lo = x; if (x > hi) hi = x; }
+          const rng = hi - lo;
+          sims = b.map(x => Number.isNaN(x) ? 0 : rng === 0 ? (x === a ? 1 : 0) : Math.min(1, Math.max(0, 1 - Math.abs(x - a) / rng)));
+          ranges[f.name] = [lo, hi, rng];
+        }
+      } else {
+        const qk = key(q);
+        sims = rows.map(r => { const k = key(r[f.name]); return qk !== null && k !== null && k === qk ? 1 : 0; });
+      }
+      local[f.name] = sims;
+    }
+    const global = rows.map((_, i) => active.reduce((s, f) => s + local[f.name][i] * effective[f.name], 0));
+    const order = rows.map((_, i) => i).sort((i, j) => (global[j] - global[i]) || (i - j));
+    return { local, global, order, effective, ranges, active: active.map(f => f.name) };
+  }
+
+  function caseLabel(rows, i, idCol) {
+    if (!idCol) return i + 1;
+    const v = rows[i][idCol];
+    if (isMissing(v)) return "";
+    return typeof v === "number" && Number.isInteger(v) ? v : label(v);
+  }
+  function dataName(name) { return RESERVED.has(name) ? name + " (data)" : name; }
+
+  function resultsTable(rows, res, topN, solutionCol, idCol, criteria) {
+    const idx = res.order.slice(0, topN);
+    const columns = ["Rank", "Case", "Similarity", dataName(solutionCol), ...criteria.map(dataName)];
+    const data = idx.map((i, r) => {
+      const o = { Rank: r + 1, Case: caseLabel(rows, i, idCol), Similarity: res.global[i] };
+      o[dataName(solutionCol)] = rows[i][solutionCol] ?? null;
+      for (const c of criteria) o[dataName(c)] = rows[i][c] ?? null;
+      return o;
+    });
+    return { columns, data, rowIndex: idx, solutionName: dataName(solutionCol) };
+  }
+  function localTable(rows, res, topN, idCol) {
+    const idx = res.order.slice(0, topN);
+    const columns = ["Rank", "Case", ...res.active.map(dataName), "Global similarity"];
+    const data = idx.map((i, r) => {
+      const o = { Rank: r + 1, Case: caseLabel(rows, i, idCol) };
+      for (const f of res.active) o[dataName(f)] = res.local[f][i];
+      o["Global similarity"] = res.global[i];
+      return o;
+    });
+    return { columns, data };
+  }
+  function queryTable(fields, query, res) {
+    const columns = ["Field", "Type", "New case value", "Weight entered", "Effective weight", "Used in matching",
+      "Lowest value", "Highest value", "Range used"];
+    const data = fields.map(f => {
+      const used = f.weight > 0, r = res.ranges[f.name];
+      return {
+        "Field": f.name, "Type": f.type, "New case value": used ? (query[f.name] ?? null) : null,
+        "Weight entered": f.weight, "Effective weight": res.effective[f.name] || 0,
+        "Used in matching": used ? "Yes" : "No (weight 0)",
+        "Lowest value": r ? r[0] : null, "Highest value": r ? r[1] : null, "Range used": r ? r[2] : null,
+      };
+    });
+    return { columns, data };
+  }
+  function solutionCounts(values) {
+    const counts = new Map();
+    for (const v of values) { const l = label(v) || "(blank)"; counts.set(l, (counts.get(l) || 0) + 1); }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }
+  function nextCaseId(values) {
+    const vals = values.filter(v => !isMissing(v));
+    if (!vals.length) return "";
+    const nums = vals.map(toNumber);
+    if (nums.every(x => !Number.isNaN(x))) return String(Math.trunc(Math.max(...nums)) + 1);
+    let best = null;
+    for (const v of vals) {
+      const m = /^(.*?)(\d+)$/.exec(String(v).trim());
+      if (m && (!best || Number(m[2]) > Number(best[2]))) best = m;
+    }
+    return best ? best[1] + String(Number(best[2]) + 1).padStart(best[2].length, "0") : "";
+  }
+  function coerceLike(values, v) {
+    if (isMissing(v)) return null;
+    if (isNumericColumn(values)) { const n = toNumber(v); if (!Number.isNaN(n)) return n; }
+    return typeof v === "string" ? v.trim() : v;
+  }
+  function appendCase(rows, columns, query, solutionCol, solutionValue, idCol, idValue) {
+    const row = {};
+    for (const c of columns) row[c] = null;
+    for (const [name, v] of Object.entries(query)) if (name in row) row[name] = coerceLike(column(rows, name), v);
+    row[solutionCol] = coerceLike(column(rows, solutionCol), solutionValue);
+    if (idCol) row[idCol] = coerceLike(column(rows, idCol), idValue);
+    return [...rows, row];
+  }
+
+  /* Turn a grid of cell values (first row = header) into named columns and row objects. */
+  function gridToTable(grid) {
+    const filled = grid.filter(r => r && r.some(v => !isMissing(v)));
+    if (!filled.length) return { columns: [], rows: [] };
+    const width = Math.max(...filled.map(r => r.length));
+    const header = filled[0], body = filled.slice(1);
+    const keep = [];
+    for (let c = 0; c < width; c++) if (!isMissing(header[c]) || body.some(r => !isMissing(r[c]))) keep.push(c);
+    const used = new Map();
+    const names = keep.map(c => {
+      let n = isMissing(header[c]) ? "Column " + (c + 1) : String(header[c]).trim();
+      if (used.has(n)) { used.set(n, used.get(n) + 1); n = n + " (" + used.get(n) + ")"; } else used.set(n, 1);
+      return n;
+    });
+    const rows = body.map(r => {
+      const o = {};
+      keep.forEach((c, k) => {
+        let v = r[c];
+        if (typeof v === "string") v = v.trim() === "" ? null : v.trim();
+        o[names[k]] = v === undefined ? null : v;
+      });
+      return o;
+    });
+    return { columns: names, rows };
+  }
+  function parseCSV(text) {
+    text = text.replace(/^﻿/, "");
+    const firstLine = text.split(/\r?\n/, 1)[0] || "";
+    const delims = [",", ";", "\t"];
+    const delim = delims.reduce((best, d) => (firstLine.split(d).length > firstLine.split(best).length ? d : best), ",");
+    const grid = [];
+    let row = [], cell = "", quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false; }
+        else cell += ch;
+      } else if (ch === '"') quoted = true;
+      else if (ch === delim) { row.push(cell); cell = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell); grid.push(row); row = []; cell = "";
+      } else cell += ch;
+    }
+    if (cell !== "" || row.length) { row.push(cell); grid.push(row); }
+    const numeric = /^\s*-?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/;
+    return grid.map((r, ri) => r.map(v => (ri > 0 && numeric.test(v) ? Number(v) : v)));
+  }
+
+  root.CBR = {
+    NUMERIC, CATEGORICAL, isMissing, toNumber, isNumericColumn, detectType, label, key, options, mostCommon,
+    numbers, median, equalWeights, column, guessIdColumn, retrieve, resultsTable, localTable, queryTable,
+    solutionCounts, nextCaseId, appendCase, gridToTable, parseCSV,
+  };
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
+
+<script id="cbr-samples" type="application/json">{"tourism":{"label":"Oman tourism packages (80 cases)","note":"Synthetic data created for demonstration only.","file":"oman_tourism_cases.xlsx","columns":["Case ID","Travel Party","Group Size","Lead Traveller Age","Origin Market","Season","Main Interest","Budget per Person (OMR)","Trip Length (days)","Accommodation","Package Taken"],"rows":[["T001","Family",5,44,"Europe","Summer","Wildlife",150,2,"Hotel 3 star","Ras al Jinz Turtles & Sur Coast"],["T002","Family",3,61,"GCC","Autumn","Relaxation",730,4,"Resort","Jebel Akhdar Mountain Retreat"],["T003","Couple",2,24,"Oman (domestic)","Winter","Beach & Sea",400,3,"Guesthouse","Musandam Fjords Cruise"],["T004","Family",4,44,"Europe","Summer","Nature & Mountains",280,8,"Resort","Salalah Khareef Escape"],["T005","Friends",6,57,"Asia","Winter","Desert Adventure",200,1,"Desert camp","Wahiba Sands Desert Camp"],["T006","Solo",1,34,"Other","Winter","Culture & Heritage",140,4,"Hotel 4-5 star","Muscat Heritage & City Break"],["T007","Friends",6,35,"GCC","Summer","Relaxation",380,7,"Resort","Salalah Khareef Escape"],["T008","Friends",4,22,"Oman (domestic)","Summer","Relaxation",500,5,"Resort","Salalah Khareef Escape"],["T009","Solo",1,40,"Asia","Autumn","Desert Adventure",100,2,"Desert camp","Wahiba Sands Desert Camp"],["T010","Friends",6,33,"Asia","Spring","Culture & Heritage",390,3,"Hotel 3 star","Muscat Heritage & City Break"],["T011","Couple",2,48,"GCC","Summer","Nature & Mountains",610,2,"Resort","Jebel Akhdar Mountain Retreat"],["T012","Solo",1,50,"GCC","Autumn","Culture & Heritage",260,3,"Hotel 4-5 star","Muscat Heritage & City Break"],["T013","Couple",2,34,"GCC","Autumn","Beach & Sea",800,5,"Resort","Luxury Beach Resort Stay"],["T014","Couple",2,33,"Europe","Spring","Nature & Mountains",760,2,"Resort","Jebel Akhdar Mountain Retreat"],["T015","Solo",1,56,"Europe","Autumn","Desert Adventure",110,2,"Desert camp","Wahiba Sands Desert Camp"],["T016","Solo",1,60,"Asia","Autumn","Beach & Sea",150,3,"Guesthouse","Ras al Jinz Turtles & Sur Coast"],["T017","Friends",3,53,"GCC","Summer","Nature & Mountains",450,7,"Hotel 3 star","Salalah Khareef Escape"],["T018","Friends",6,27,"Oman (domestic)","Summer","Nature & Mountains",240,4,"Hotel 3 star","Salalah Khareef Escape"],["T019","Family",3,38,"GCC","Summer","Nature & Mountains",470,4,"Hotel 4-5 star","Salalah Khareef Escape"],["T020","Family",6,40,"Oman (domestic)","Winter","Relaxation",1040,6,"Resort","Luxury Beach Resort Stay"],["T021","Family",3,47,"Europe","Autumn","Beach & Sea",230,3,"Guesthouse","Ras al Jinz Turtles & Sur Coast"],["T022","Friends",4,58,"Europe","Autumn","Desert Adventure",170,1,"Desert camp","Wahiba Sands Desert Camp"],["T023","Couple",2,36,"Europe","Autumn","Relaxation",1400,5,"Resort","Luxury Beach Resort Stay"],["T024","Friends",4,47,"Oman (domestic)","Summer","Nature & Mountains",350,7,"Hotel 4-5 star","Salalah Khareef Escape"],["T025","Couple",2,61,"GCC","Winter","Desert Adventure",280,1,"Desert camp","Wahiba Sands Desert Camp"],["T026","Friends",4,57,"Oman (domestic)","Summer","Nature & Mountains",520,7,"Hotel 3 star","Salalah Khareef Escape"],["T027","Couple",2,41,"GCC","Autumn","Nature & Mountains",880,2,"Hotel 4-5 star","Jebel Akhdar Mountain Retreat"],["T028","Couple",2,44,"Europe","Spring","Nature & Mountains",470,2,"Resort","Jebel Akhdar Mountain Retreat"],["T029","Couple",2,54,"Europe","Winter","Beach & Sea",460,2,"Hotel 3 star","Musandam Fjords Cruise"],["T030","Couple",2,38,"Oman (domestic)","Summer","Beach & Sea",170,2,"Guesthouse","Ras al Jinz Turtles & Sur Coast"],["T031","Couple",2,34,"Europe","Winter","Desert Adventure",200,3,"Desert camp","Wahiba Sands Desert Camp"],["T032","Solo",1,38,"Europe","Autumn","Culture & Heritage",340,4,"Hotel 3 star","Muscat Heritage & City Break"],["T033","Family",4,35,"Oman (domestic)","Spring","Nature & Mountains",220,2,"Hotel 3 star","Musandam Fjords Cruise"],["T034","Family",5,40,"Asia","Summer","Beach & Sea",180,3,"Hotel 3 star","Ras al Jinz Turtles & Sur Coast"],["T035","Couple",2,22,"Other","Summer","Nature & Mountains",320,2,"Hotel 4-5 star","Jebel Akhdar Mountain Retreat"],["T036","Couple",2,46,"GCC","Spring","Nature & Mountains",460,4,"Resort","Jebel Akhdar Mountain Retreat"],["T037","Couple",2,27,"Asia","Spring","Relaxation",530,3,"Resort","Jebel Akhdar Mountain Retreat"],["T038","Family",3,25,"Oman (domestic)","Summer","Relaxation",420,7,"Hotel 4-5 star","Salalah Khareef Escape"],["T039","Friends",5,57,"GCC","Spring","Beach & Sea",490,4,"Hotel 3 star","Musandam Fjords Cruise"],["T040","Friends",5,58,"Oman (domestic)","Autumn","Shopping & City",220,2,"Hotel 3 star","Muscat Heritage & City Break"],["T041","Friends",4,41,"Other","Winter","Beach & Sea",410,3,"Guesthouse","Musandam Fjords Cruise"],["T042","Couple",2,28,"Asia","Autumn","Wildlife",280,2,"Guesthouse","Ras al Jinz Turtles & Sur Coast"],["T043","Solo",1,40,"GCC","Spring","Culture & Heritage",290,2,"Hotel 4-5 star","Muscat Heritage & City Break"],["T044","Couple",2,34,"GCC","Autumn","Nature & Mountains",720,4,"Resort","Jebel Akhdar Mountain Retreat"],["T045","Couple",2,33,"Europe","Spring","Beach & Sea",880,5,"Resort","Luxury Beach Resort Stay"],["T046","Friends",3,41,"Oman (domestic)","Autumn","Desert Adventure",130,1,"Desert camp","Wahiba Sands Desert Camp"],["T047","Friends",6,47,"Europe","Winter","Desert Adventure",270,2,"Desert camp","Wahiba Sands Desert Camp"],["T048","Solo",1,32,"Oman (domestic)","Spring","Culture & Heritage",240,3,"Hotel 4-5 star","Muscat Heritage & City Break"],["T049","Family",5,42,"Europe","Summer","Nature & Mountains",370,4,"Hotel 4-5 star","Jebel Akhdar Mountain Retreat"],["T050","Family",6,53,"Other","Spring","Relaxation",1660,5,"Resort","Luxury Beach Resort Stay"],["T051","Solo",1,29,"Europe","Autumn","Shopping & City",330,2,"Hotel 4-5 star","Muscat Heritage & City Break"],["T052","Couple",2,49,"Other","Autumn","Relaxation",800,2,"Resort","Jebel Akhdar Mountain Retreat"],["T053","Couple",2,53,"Oman (domestic)","Autumn","Wildlife",310,2,"Hotel 3 star","Ras al Jinz Turtles & Sur Coast"],["T054","Couple",2,36,"GCC","Autumn","Beach & Sea",730,4,"Resort","Luxury Beach Resort Stay"],["T055","Couple",2,24,"Europe","Spring","Beach & Sea",420,3,"Hotel 3 star","Musandam Fjords Cruise"],["T056","Family",6,34,"Oman (domestic)","Summer","Nature & Mountains",500,4,"Resort","Salalah Khareef Escape"],["T057","Couple",2,44,"Oman (domestic)","Spring","Nature & Mountains",270,2,"Guesthouse","Musandam Fjords Cruise"],["T058","Couple",2,41,"GCC","Spring","Shopping & City",190,2,"Hotel 3 star","Muscat Heritage & City Break"],["T059","Solo",1,33,"Europe","Summer","Beach & Sea",290,3,"Guesthouse","Ras al Jinz Turtles & Sur Coast"],["T060","Friends",6,31,"GCC","Summer","Relaxation",260,8,"Hotel 3 star","Salalah Khareef Escape"],["T061","Friends",6,53,"Europe","Winter","Culture & Heritage",430,4,"Hotel 3 star","Muscat Heritage & City Break"],["T062","Family",6,57,"Europe","Winter","Nature & Mountains",330,4,"Guesthouse","Musandam Fjords Cruise"],["T063","Couple",2,25,"Other","Winter","Nature & Mountains",410,4,"Hotel 3 star","Musandam Fjords Cruise"],["T064","Friends",4,53,"Asia","Winter","Shopping & City",230,3,"Hotel 3 star","Muscat Heritage & City Break"],["T065","Friends",3,23,"Europe","Spring","Culture & Heritage",240,3,"Hotel 3 star","Muscat Heritage & City Break"],["T066","Couple",2,41,"Europe","Autumn","Desert Adventure",170,2,"Desert camp","Wahiba Sands Desert Camp"],["T067","Solo",1,39,"Other","Winter","Culture & Heritage",350,3,"Hotel 4-5 star","Muscat Heritage & City Break"],["T068","Solo",1,50,"Europe","Spring","Desert Adventure",250,1,"Desert camp","Wahiba Sands Desert Camp"],["T069","Couple",2,32,"Europe","Autumn","Beach & Sea",1530,4,"Resort","Luxury Beach Resort Stay"],["T070","Couple",2,61,"Asia","Summer","Relaxation",380,3,"Hotel 4-5 star","Jebel Akhdar Mountain Retreat"],["T071","Couple",2,32,"Europe","Spring","Culture & Heritage",280,3,"Hotel 3 star","Muscat Heritage & City Break"],["T072","Friends",4,49,"Oman (domestic)","Spring","Desert Adventure",140,2,"Desert camp","Wahiba Sands Desert Camp"],["T073","Family",6,37,"Other","Spring","Beach & Sea",1680,4,"Resort","Luxury Beach Resort Stay"],["T074","Friends",5,60,"Europe","Summer","Relaxation",270,7,"Resort","Salalah Khareef Escape"],["T075","Couple",2,38,"Oman (domestic)","Spring","Beach & Sea",390,2,"Hotel 3 star","Musandam Fjords Cruise"],["T076","Family",4,31,"GCC","Summer","Relaxation",600,7,"Hotel 3 star","Salalah Khareef Escape"],["T077","Family",4,44,"Europe","Autumn","Beach & Sea",310,2,"Hotel 3 star","Ras al Jinz Turtles & Sur Coast"],["T078","Friends",4,40,"GCC","Summer","Nature & Mountains",510,8,"Hotel 4-5 star","Salalah Khareef Escape"],["T079","Couple",2,55,"Other","Autumn","Wildlife",330,3,"Hotel 3 star","Ras al Jinz Turtles & Sur Coast"],["T080","Couple",2,47,"Europe","Spring","Desert Adventure",140,3,"Desert camp","Wahiba Sands Desert Camp"]]},"dam":{"label":"Dam gate example from the CBR lecture (4 cases)","note":"The four days from the lecture slides. Enter the slide's new case to check the hand calculation.","file":"dam_gate_example.xlsx","columns":["Day","Dam Water Level","Sg. Pahang","Sg. Soi","Sg. Pekan","Sg. Gambang","Gate"],"rows":[[1,29.26,11.06,30.4,15.99,23.0,"Open"],[2,28.99,13.09,29.01,17.09,20.99,"Close"],[3,29.5,12.89,20.99,21.99,21.09,"Close"],[4,27.01,10.11,27.89,11.09,19.22,"Open"]]}}</script>
+
+<script>
+(function () {
+  "use strict";
+  const C = window.CBR;
+  const $ = id => document.getElementById(id);
+  const SAMPLES = JSON.parse($("cbr-samples").textContent);
+  const NO_ID = "__none__";
+  const esc = s => String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  const pct = (x, d = 2) => (x * 100).toFixed(d) + "%";
+  const fmtNum = v => (typeof v === "number" ? (Number.isInteger(v) ? v.toLocaleString("en") : v.toLocaleString("en", { maximumFractionDigits: 4 })) : v);
+  const show = v => (C.isMissing(v) ? "" : String(fmtNum(v)));
+  const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; };
+  const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  const state = {
+    sourceName: "", sheet: null, columns: [], original: [], rows: [],
+    detected: {}, numericOk: {}, solutionCol: null, idCol: null, criteria: [],
+    config: {}, query: {}, topN: 5, ran: false, view: "values", lastResult: null, workbook: null,
+    removeArmed: false, retainSolution: null, retainId: null,
+  };
+
+  /* ------------------------------------------------------------ downloads */
+  let downloadMode = window.claude && typeof window.claude.use === "function" ? "pending" : "browser";
+  let downloadsApi = null;
+  if (downloadMode === "pending") {
+    window.claude.use("downloads").then(ns => {
+      downloadsApi = ns; downloadMode = ns ? "viewer" : "none";
+      renderResults(); renderRetain();
+    }).catch(() => { downloadMode = "none"; renderResults(); renderRetain(); });
+  }
+  async function offerFile(filename, buffer, statusEl) {
+    const blob = new Blob([buffer], { type: XLSX_MIME });
+    if (downloadMode === "pending") {
+      try { downloadsApi = await window.claude.use("downloads"); } catch (e) { downloadsApi = null; }
+      downloadMode = downloadsApi ? "viewer" : "none";
+    }
+    if (downloadMode === "viewer") {
+      try {
+        const r = await downloadsApi.save({ filename, data: blob });
+        setStatus(statusEl, r && r.status === "delivered" ? "Sent." : `Saved ${filename}.`, "ok");
+      } catch (e) {
+        const code = e && e.code;
+        if (code === "declined") setStatus(statusEl, "Download cancelled.", "");
+        else if (code === "rate_limited") setStatus(statusEl, "A download prompt is already open. Try again in a moment.", "warn");
+        else setStatus(statusEl, "Downloads are not available in this view. Open the page in claude.ai or in a browser.", "warn");
+      }
+      return;
+    }
+    if (downloadMode === "none") {
+      setStatus(statusEl, "Downloads are not available in this view. Open the page in claude.ai or in a browser.", "warn");
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setStatus(statusEl, `Downloaded ${filename}.`, "ok");
+  }
+  function setStatus(el, text, kind) { if (!el) return; el.textContent = text; el.className = "status" + (kind ? " " + kind : ""); }
+
+  /* ------------------------------------------------------------ Excel helpers */
+  function cellValue(v) {
+    if (v === null || v === undefined) return null;
+    if (typeof v === "number" || typeof v === "boolean") return v;
+    if (typeof v === "string") return v.trim() === "" ? null : v.trim();
+    if (v instanceof Date) return isNaN(v) ? null : v.toISOString().slice(0, 10);
+    if (typeof v === "object") {
+      if ("result" in v) return cellValue(v.result);
+      if (Array.isArray(v.richText)) return cellValue(v.richText.map(t => t.text).join(""));
+      if ("text" in v) return cellValue(v.text);
+      if ("error" in v) return null;
+    }
+    return String(v);
+  }
+  function sheetToGrid(ws) {
+    const grid = [];
+    const cols = ws.columnCount;
+    for (let r = 1; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r), vals = [];
+      for (let c = 1; c <= cols; c++) vals.push(cellValue(row.getCell(c).value));
+      grid.push(vals);
+    }
+    return grid;
+  }
+  function styleSheet(ws, columns, percentCols, widths) {
+    const head = ws.getRow(1);
+    head.eachCell(cell => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F4E5F" } };
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.alignment = { vertical: "middle", wrapText: true };
+    });
+    columns.forEach((name, i) => {
+      const col = ws.getColumn(i + 1);
+      if (percentCols.includes(name)) col.eachCell((cell, r) => { if (r > 1) cell.numFmt = "0.00%"; });
+      let w = String(name).length;
+      col.eachCell((cell, r) => { if (r > 1 && cell.value !== null && cell.value !== undefined) w = Math.max(w, String(cell.value).length); });
+      col.width = widths && widths[i] ? widths[i] : Math.min(Math.max(w + 2, 10), 60);
+    });
+  }
+  function addTableSheet(wb, name, columns, data, percentCols = [], widths) {
+    const ws = wb.addWorksheet(name.slice(0, 31), { views: [{ state: "frozen", ySplit: 1 }] });
+    ws.addRow(columns);
+    for (const o of data) ws.addRow(columns.map(c => (o[c] === undefined ? null : o[c])));
+    styleSheet(ws, columns, percentCols, widths);
+    return ws;
+  }
+  function needExcel(statusEl) {
+    if (window.ExcelJS) return true;
+    setStatus(statusEl, "The Excel library could not load. Check the internet connection and reload the page.", "err");
+    return false;
+  }
+
+  /* ------------------------------------------------------------ loading data */
+  function setData(columns, rows, sourceName, sheet) {
+    state.columns = columns; state.original = rows.map(r => ({ ...r })); state.rows = rows.map(r => ({ ...r }));
+    state.sourceName = sourceName; state.sheet = sheet;
+    state.detected = {}; state.numericOk = {};
+    for (const c of columns) { const vals = C.column(rows, c); state.numericOk[c] = C.isNumericColumn(vals); state.detected[c] = state.numericOk[c] ? C.NUMERIC : C.CATEGORICAL; }
+    state.solutionCol = columns[columns.length - 1];
+    state.idCol = C.guessIdColumn(columns, rows, new Set([state.solutionCol]));
+    state.ran = false; state.removeArmed = false; state.retainSolution = null; state.retainId = null;
+    $("topn").value = String(Math.min(5, rows.length || 1));
+    renderBank(); resetCriteria();
+  }
+  function resetCriteria() {
+    state.criteria = state.columns.filter(c => c !== state.solutionCol && c !== state.idCol);
+    const w = C.equalWeights(state.criteria.length);
+    state.config = {};
+    state.criteria.forEach((c, i) => { state.config[c] = { type: state.detected[c], weight: w[i] }; });
+    resetQuery(); renderSelectors(); renderWeights(); renderQuery(); update();
+  }
+  function resetQuery() {
+    state.query = {};
+    for (const c of state.criteria) state.query[c] = defaultValue(c);
+  }
+  function defaultValue(c) {
+    const vals = C.column(state.original, c);
+    if (state.config[c].type === C.NUMERIC) {
+      const nums = C.numbers(vals), m = C.median(nums);
+      if (Number.isNaN(m)) return 0;
+      return nums.every(Number.isInteger) ? Math.round(m) : Math.round(m * 100) / 100;
+    }
+    return C.mostCommon(vals) ?? "";
+  }
+  function loadSample(key) {
+    const s = SAMPLES[key];
+    const rows = s.rows.map(r => Object.fromEntries(s.columns.map((c, i) => [c, r[i]])));
+    $("sample-note").textContent = s.note;
+    setStatus($("bank-status"), "", "");
+    setData(s.columns, rows, s.file, null);
+    if (key === "tourism") {
+      state.ran = true;
+      update();
+    }
+  }
+  async function loadFile(file) {
+    const status = $("bank-status");
+    setStatus(status, `Reading ${file.name}…`, "");
+    try {
+      const name = file.name.toLowerCase();
+      if (name.endsWith(".csv")) {
+        const t = C.gridToTable(C.parseCSV(await file.text()));
+        state.workbook = null; $("sheet-row").hidden = true;
+        return finishLoad(t, file.name, null);
+      }
+      if (!needExcel(status)) return;
+      const wb = new window.ExcelJS.Workbook();
+      await wb.xlsx.load(await file.arrayBuffer());
+      const sheets = wb.worksheets.filter(ws => ws.rowCount > 0);
+      if (!sheets.length) { setStatus(status, "This workbook has no sheets with data.", "err"); return; }
+      state.workbook = { wb, name: file.name, sheets };
+      const sel = $("sheet-select");
+      sel.innerHTML = sheets.map((ws, i) => `<option value="${i}">${esc(ws.name)}</option>`).join("");
+      $("sheet-row").hidden = sheets.length < 2;
+      loadSheet(0);
+    } catch (e) {
+      setStatus(status, "Could not read this file. Save it as .xlsx or .csv and try again. (" + (e && e.message ? e.message : e) + ")", "err");
+    }
+  }
+  function loadSheet(i) {
+    const { name, sheets } = state.workbook;
+    const ws = sheets[i];
+    finishLoad(C.gridToTable(sheetToGrid(ws)), name, ws.name);
+  }
+  function finishLoad(t, name, sheet) {
+    const status = $("bank-status");
+    if (t.columns.length < 2 || !t.rows.length) {
+      setStatus(status, "The sheet needs at least two columns (criteria and a solution) and at least one case below the header row.", "err");
+      return;
+    }
+    setStatus(status, `Loaded ${t.rows.length} cases from ${name}${sheet ? " (" + sheet + ")" : ""}.`, "ok");
+    setData(t.columns, t.rows, name, sheet);
+  }
+
+  /* ------------------------------------------------------------ rendering */
+  function renderBank() {
+    const added = state.rows.length - state.original.length;
+    const preview = state.rows.slice(0, 200);
+    $("bank-summary").innerHTML = `
+      <div class="facts">
+        <div class="fact"><b>${state.rows.length}</b><span>cases</span></div>
+        <div class="fact"><b>${state.columns.length}</b><span>fields</span></div>
+        ${added > 0 ? `<div class="fact"><b>+${added}</b><span>added this session</span></div>` : ""}
+      </div>
+      <details class="peek"><summary>Preview ${esc(state.sourceName)}</summary>
+        <div class="frame"><table><thead><tr>${state.columns.map(c => `<th${state.numericOk[c] ? ' class="n"' : ""}>${esc(c)}</th>`).join("")}</tr></thead>
+        <tbody>${preview.map(r => `<tr>${state.columns.map(c => `<td${state.numericOk[c] ? ' class="n"' : ""}>${esc(show(r[c]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        ${state.rows.length > preview.length ? `<p class="hint" style="margin-top: 6px">Showing the first ${preview.length} of ${state.rows.length} cases.</p>` : ""}
+      </details>`;
+  }
+  function renderSelectors() {
+    $("solution-select").innerHTML = state.columns.map(c => `<option value="${esc(c)}"${c === state.solutionCol ? " selected" : ""}>${esc(c)}</option>`).join("");
+    const ids = state.columns.filter(c => c !== state.solutionCol);
+    $("id-select").innerHTML = `<option value="${NO_ID}">None: use the row number</option>` +
+      ids.map(c => `<option value="${esc(c)}"${c === state.idCol ? " selected" : ""}>${esc(c)}</option>`).join("");
+    if (!state.idCol) $("id-select").value = NO_ID;
+  }
+  function renderWeights() {
+    const host = $("weights");
+    if (!state.criteria.length) { host.innerHTML = `<div class="notice err">No fields are left to compare. Choose a different solution or ID column.</div>`; return; }
+    host.innerHTML = `<div class="weights">
+      <div class="wrow head"><span>Field</span><span>Type</span><span>Weight</span><span>0–100</span><span style="text-align:right">Effective</span></div>
+      ${state.criteria.map((c, i) => {
+        const cfg = state.config[c];
+        const detail = state.numericOk[c] ? rangeText(c) : `${C.options(C.column(state.original, c)).length} categories`;
+        return `<div class="wrow${cfg.weight > 0 ? "" : " off"}" data-i="${i}">
+          <div class="wname">${esc(c)}<small>${esc(detail)}</small></div>
+          <select class="wtype" id="type-${i}" aria-label="Type of ${esc(c)}">
+            <option value="${C.NUMERIC}"${cfg.type === C.NUMERIC ? " selected" : ""}${state.numericOk[c] ? "" : " disabled"}>${C.NUMERIC}</option>
+            <option value="${C.CATEGORICAL}"${cfg.type === C.CATEGORICAL ? " selected" : ""}>${C.CATEGORICAL}</option>
+          </select>
+          <input class="wslider" type="range" id="wr-${i}" min="0" max="100" step="1" value="${cfg.weight}" aria-label="Weight of ${esc(c)}">
+          <input class="wnum" type="number" id="wn-${i}" min="0" max="100" step="1" value="${cfg.weight}" aria-label="Weight of ${esc(c)}, 0 to 100">
+          <span class="weff" id="we-${i}"></span>
+        </div>`;
+      }).join("")}
+      <div class="wtotal" id="wtotal"></div>
+    </div>`;
+    updateEffective();
+  }
+  function rangeText(c) {
+    const n = C.numbers(C.column(state.original, c));
+    return n.length ? `stored ${fmtNum(Math.min(...n))} to ${fmtNum(Math.max(...n))}` : "";
+  }
+  function fields() { return state.criteria.map(c => ({ name: c, type: state.config[c].type, weight: state.config[c].weight })); }
+  function totalWeight() { return state.criteria.reduce((s, c) => s + state.config[c].weight, 0); }
+  function updateEffective() {
+    const total = totalWeight();
+    state.criteria.forEach((c, i) => {
+      const w = state.config[c].weight, el = $("we-" + i);
+      if (el) el.textContent = total > 0 && w > 0 ? (100 * w / total).toFixed(1) + "%" : "not used";
+      const row = el && el.parentElement;
+      if (row) row.classList.toggle("off", !(w > 0));
+    });
+    const t = $("wtotal");
+    if (!t) return;
+    if (total <= 0) { t.className = "wtotal bad"; t.innerHTML = `<span>Give at least one field a weight above 0.</span><b>Total 0</b>`; }
+    else if (total === 100) { t.className = "wtotal"; t.innerHTML = `<span>Weights add up to 100.</span><b>Total 100</b>`; }
+    else { t.className = "wtotal"; t.innerHTML = `<span>Each weight is divided by the total, giving the effective weights shown.</span><b>Total ${fmtNum(total)}</b>`; }
+  }
+  function renderQuery() {
+    const host = $("query");
+    const active = state.criteria.filter(c => state.config[c].weight > 0);
+    if (!active.length) { host.innerHTML = `<div class="empty" style="grid-column: 1 / -1">Give at least one field a weight above 0.</div>`; return; }
+    host.innerHTML = active.map(c => {
+      const i = state.criteria.indexOf(c), v = state.query[c];
+      if (state.config[c].type === C.NUMERIC) {
+        return `<label class="field"><span>${esc(c)}</span>
+          <input type="number" step="any" id="q-${i}" data-field="${i}" value="${esc(v ?? "")}">
+          <small>${esc(rangeText(c))}</small></label>`;
+      }
+      const opts = C.options(C.column(state.original, c));
+      const cur = C.label(v);
+      if (cur !== null && !opts.some(o => o.toLowerCase() === cur.toLowerCase())) opts.unshift(cur);
+      return `<label class="field"><span>${esc(c)}</span>
+        <select id="q-${i}" data-field="${i}">${opts.map(o => `<option value="${esc(o)}"${cur !== null && o.toLowerCase() === cur.toLowerCase() ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>
+        <small>${opts.length} values</small></label>`;
+    }).join("");
+  }
+  function currentTopN() {
+    const n = Math.floor(Number($("topn").value));
+    const max = state.rows.length;
+    const note = $("topn-note");
+    if (!Number.isFinite(n) || n < 1) { note.textContent = "Enter a whole number of at least 1."; return Math.min(1, max); }
+    note.textContent = n > max ? `Only ${max} cases are stored, so all of them are shown.` : "";
+    return Math.min(n, max);
+  }
+
+  function computeResult() {
+    if (!state.rows.length || totalWeight() <= 0) return null;
+    const topN = currentTopN();
+    const res = C.retrieve(state.rows, state.query, fields());
+    const table = C.resultsTable(state.rows, res, topN, state.solutionCol, state.idCol, state.criteria);
+    return { res, topN, table };
+  }
+  function update() {
+    updateEffective();
+    renderResults();
+    renderRetain();
+  }
+
+  function renderResults() {
+    const host = $("results");
+    if (!state.ran) { state.lastResult = null; host.innerHTML = `<div class="empty">Set the weights and the new case, then choose <b>Find similar cases</b>.</div>`; return; }
+    const out = computeResult();
+    state.lastResult = out;
+    if (!out) { host.innerHTML = `<div class="notice err">Give at least one field a weight above 0 to search.</div>`; return; }
+    const { res, topN, table } = out;
+    const best = table.data[0];
+    const sol = C.label(best[table.solutionName]) || "(blank)";
+    const counts = C.solutionCounts(table.data.map(d => d[table.solutionName]));
+    const activeSet = new Set(res.active);
+    const isLocal = state.view === "local";
+    const shownCriteria = isLocal ? state.criteria.filter(c => activeSet.has(c)) : state.criteria;
+    const numericCol = c => state.config[c] && state.config[c].type === C.NUMERIC;
+    const heat = s => `background: color-mix(in srgb, var(--heat) ${Math.round(s * 38)}%, transparent)`;
+
+    const head = `<tr><th class="n">Rank</th><th>Case</th><th>Similarity</th><th>${esc(state.solutionCol)}<span class="sub">solution</span></th>${shownCriteria.map(c => {
+      const used = activeSet.has(c);
+      const sub = used ? (100 * res.effective[c]).toFixed(1) + "% weight" : "not used";
+      return `<th class="${numericCol(c) || isLocal ? "n" : ""}${used ? "" : " unused"}">${esc(c)}<span class="sub">${sub}</span></th>`;
+    }).join("")}</tr>`;
+    const body = table.data.map((d, r) => {
+      const i = table.rowIndex[r];
+      const cells = shownCriteria.map(c => {
+        const used = activeSet.has(c);
+        if (!used) return `<td class="unused${numericCol(c) ? " n" : ""}">${esc(show(state.rows[i][c]))}</td>`;
+        const s = res.local[c][i];
+        const text = isLocal ? pct(s, 1) : show(state.rows[i][c]);
+        return `<td class="${numericCol(c) || isLocal ? "n" : ""}" style="${heat(s)}" title="Local similarity ${pct(s, 2)}">${esc(text)}</td>`;
+      }).join("");
+      return `<tr class="${r === 0 ? "best" : ""}"><td class="n">${d.Rank}</td><td class="mono">${esc(show(d.Case))}${r === 0 ? '<span class="best-tag">best</span>' : ""}</td>
+        <td><div class="simcell"><span class="bar"><i style="width:${(d.Similarity * 100).toFixed(2)}%"></i></span><span class="num">${pct(d.Similarity)}</span></div></td>
+        <td>${esc(show(d[table.solutionName]))}</td>${cells}</tr>`;
+    }).join("");
+
+    const dlDisabled = downloadMode === "none";
+    host.innerHTML = `
+      <div class="reuse">
+        <div style="display:grid; gap:4px; min-width:0">
+          <span class="label">Suggested solution (reuse)</span>
+          <span class="solution">${esc(sol)}</span>
+          <span class="from">From case <b class="mono">${esc(show(best.Case))}</b>, the most similar of ${state.rows.length} stored cases.</span>
+        </div>
+        <div class="score">${pct(best.Similarity)}<small>similar</small></div>
+      </div>
+      ${topN > 1 ? `<div class="chips"><span class="hint">Solutions among the top ${topN}:</span>${counts.map(([s, n]) => `<span class="chip">${esc(s)} <b>×${n}</b></span>`).join("")}</div>` : ""}
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="Table view">
+          <button type="button" data-view="values" aria-pressed="${!isLocal}">Field values</button>
+          <button type="button" data-view="local" aria-pressed="${isLocal}">Local similarity</button>
+        </div>
+        <span class="legend"><i></i>shading = local similarity, 0 to 100%</span>
+      </div>
+      <div class="frame"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
+      ${state.idCol ? "" : `<p class="hint">Case = row number of the case in your file (first case = 1).</p>`}
+      <div class="row">
+        <button type="button" class="btn primary" id="dl-results"${dlDisabled ? " disabled" : ""}>Download results (.xlsx)</button>
+        <p class="status" id="dl-status" role="status" aria-live="polite">${dlDisabled ? "Downloads are not available in this view. Open the page in claude.ai or in a browser." : "Four sheets: summary, top results, local similarity, new case and weights."}</p>
+      </div>`;
+  }
+
+  function renderRetain() {
+    const host = $("retain");
+    const out = state.lastResult;
+    if (!out) { host.innerHTML = `<div class="empty">Run a search first.</div>`; return; }
+    const best = out.table.data[0];
+    const suggested = C.label(best[out.table.solutionName]) || "";
+    const solOptions = C.options(C.column(state.rows, state.solutionCol));
+    const added = state.rows.length - state.original.length;
+    const nextId = state.idCol ? C.nextCaseId(C.column(state.rows, state.idCol)) : "";
+    const dlDisabled = downloadMode === "none";
+    host.innerHTML = `
+      <div class="row">
+        <label class="field" style="flex: 2 1 260px"><span>Confirmed solution (${esc(state.solutionCol)})</span>
+          <input type="text" id="retain-solution" list="retain-solutions" value="${esc(state.retainSolution ?? suggested)}">
+          <datalist id="retain-solutions">${solOptions.map(o => `<option value="${esc(o)}"></option>`).join("")}</datalist>
+          <small>Starts with the suggested solution. Type or pick another to revise it.</small>
+        </label>
+        ${state.idCol ? `<label class="field" style="flex: 1 1 160px"><span>${esc(state.idCol)} for the new case</span>
+          <input type="text" id="retain-id" value="${esc(state.retainId ?? nextId)}"></label>` : ""}
+        <button type="button" class="btn primary" id="retain-add">Add to knowledge bank</button>
+      </div>
+      <p class="status" id="retain-status" role="status" aria-live="polite"></p>
+      ${added > 0 ? `<div class="row">
+          <span class="badge">${added} case${added > 1 ? "s" : ""} added this session</span>
+          <button type="button" class="btn" id="dl-bank"${dlDisabled ? " disabled" : ""}>Download updated knowledge bank (.xlsx)</button>
+          <button type="button" class="btn danger" id="retain-remove">${state.removeArmed ? "Select again to remove them" : "Remove added cases"}</button>
+        </div>
+        <p class="status" id="bank-dl-status" role="status" aria-live="polite"></p>` : ""}`;
+  }
+
+  /* ------------------------------------------------------------ Excel output */
+  async function downloadResults() {
+    const status = $("dl-status");
+    const out = state.lastResult;
+    if (!out || !needExcel(status)) return;
+    setStatus(status, "Preparing the report…", "");
+    try {
+      const { res, topN, table } = out;
+      const local = C.localTable(state.rows, res, topN, state.idCol);
+      const q = C.queryTable(fields(), state.query, res);
+      const best = table.data[0];
+      const counts = C.solutionCounts(table.data.map(d => d[table.solutionName]));
+      const d = new Date(), p = n => String(n).padStart(2, "0");
+      const summary = [
+        ["Generated", `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`],
+        ["Knowledge bank", state.sourceName + (state.sheet ? ` (sheet: ${state.sheet})` : "")],
+        ["Cases in knowledge bank", state.rows.length],
+        ["Solution column", state.solutionCol],
+        ["Case ID column", state.idCol || "None (row numbers used)"],
+        ["Top N", topN],
+        ["Suggested solution", C.label(best[table.solutionName]) || "(blank)"],
+        ["From case", best.Case],
+        ["Highest similarity", pct(best.Similarity)],
+        [`Solutions among top ${topN}`, counts.map(([s, n]) => `${s} x${n}`).join(", ")],
+        ["Local similarity (categorical)", "1 if the values are the same (ignoring capitals and spaces), otherwise 0"],
+        ["Local similarity (numeric)", "1 - |new value - stored value| / range, where range = highest - lowest value of the field including the new case"],
+        ["Global similarity", "(1 / sum of weights) x sum of (weight x local similarity) over the weighted fields"],
+        ["Missing values", "A blank value in a stored case gives local similarity 0 for that field"],
+        ["Ties", "Cases with equal similarity keep their order in the knowledge bank"],
+      ].map(([Item, Value]) => ({ Item, Value }));
+      const wb = new window.ExcelJS.Workbook();
+      wb.creator = "CBR Workbench"; wb.created = d;
+      const ws = addTableSheet(wb, "Summary", ["Item", "Value"], summary, [], [30, 90]);
+      ws.getColumn(2).eachCell((cell, r) => { if (r > 1) cell.alignment = { wrapText: true, vertical: "top" }; });
+      addTableSheet(wb, `Top ${topN} Results`, table.columns, table.data, ["Similarity"]);
+      addTableSheet(wb, "Local Similarity", local.columns, local.data, local.columns.filter(c => c !== "Rank" && c !== "Case"));
+      addTableSheet(wb, "New Case & Weights", q.columns, q.data, ["Effective weight"]);
+      const buffer = await wb.xlsx.writeBuffer();
+      await offerFile(`cbr_results_${stamp()}.xlsx`, buffer, status);
+    } catch (e) {
+      setStatus(status, "Could not build the Excel file. (" + (e && e.message ? e.message : e) + ")", "err");
+    }
+  }
+  async function downloadBank() {
+    const status = $("bank-dl-status");
+    if (!needExcel(status)) return;
+    try {
+      const wb = new window.ExcelJS.Workbook();
+      addTableSheet(wb, "Knowledge bank", state.columns, state.rows);
+      await offerFile(`knowledge_bank_updated_${stamp()}.xlsx`, await wb.xlsx.writeBuffer(), status);
+    } catch (e) {
+      setStatus(status, "Could not build the Excel file. (" + (e && e.message ? e.message : e) + ")", "err");
+    }
+  }
+
+  /* ------------------------------------------------------------ events */
+  function setSource(kind) {
+    const sample = kind === "sample";
+    $("src-sample").setAttribute("aria-pressed", String(sample));
+    $("src-upload").setAttribute("aria-pressed", String(!sample));
+    $("sample-pane").hidden = !sample;
+    $("upload-pane").hidden = sample;
+    if (sample) loadSample($("sample-select").value);
+  }
+  $("src-sample").addEventListener("click", () => setSource("sample"));
+  $("src-upload").addEventListener("click", () => setSource("upload"));
+  $("sample-select").innerHTML = Object.entries(SAMPLES).map(([k, s]) => `<option value="${k}">${esc(s.label)}</option>`).join("");
+  $("sample-select").addEventListener("change", e => loadSample(e.target.value));
+  $("file-input").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; if (f) loadFile(f); e.target.value = ""; });
+  $("sheet-select").addEventListener("change", e => loadSheet(Number(e.target.value)));
+  const drop = $("drop");
+  ["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) loadFile(f); });
+
+  $("solution-select").addEventListener("change", e => {
+    state.solutionCol = e.target.value;
+    state.idCol = C.guessIdColumn(state.columns, state.original, new Set([state.solutionCol]));
+    resetCriteria();
+  });
+  $("id-select").addEventListener("change", e => {
+    state.idCol = e.target.value === NO_ID ? null : e.target.value;
+    resetCriteria();
+  });
+
+  $("weights").addEventListener("input", e => {
+    const row = e.target.closest(".wrow");
+    if (!row || row.dataset.i === undefined) return;
+    const i = Number(row.dataset.i), c = state.criteria[i];
+    if (e.target.classList.contains("wslider") || e.target.classList.contains("wnum")) {
+      let w = Number(e.target.value);
+      if (!Number.isFinite(w)) w = 0;
+      w = Math.min(100, Math.max(0, w));
+      const wasOn = state.config[c].weight > 0;
+      state.config[c].weight = w;
+      if (e.target.classList.contains("wslider")) $("wn-" + i).value = String(w); else $("wr-" + i).value = String(w);
+      if (wasOn !== (w > 0)) renderQuery();
+      update();
+    }
+  });
+  $("weights").addEventListener("change", e => {
+    if (!e.target.classList.contains("wtype")) return;
+    const i = Number(e.target.closest(".wrow").dataset.i), c = state.criteria[i];
+    state.config[c].type = e.target.value;
+    state.query[c] = defaultValue(c);
+    renderQuery(); update();
+  });
+  $("weights").addEventListener("blur", e => {
+    if (e.target.classList.contains("wnum")) e.target.value = String(state.config[state.criteria[Number(e.target.closest(".wrow").dataset.i)]].weight);
+  }, true);
+
+  $("query").addEventListener("input", e => {
+    const i = e.target.dataset.field;
+    if (i === undefined) return;
+    const c = state.criteria[Number(i)];
+    state.query[c] = state.config[c].type === C.NUMERIC ? (e.target.value === "" ? null : Number(e.target.value)) : e.target.value;
+    update();
+  });
+  $("topn").addEventListener("input", () => update());
+  $("run").addEventListener("click", () => {
+    state.ran = true; update();
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    $("step-results").scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  });
+
+  $("results").addEventListener("click", e => {
+    const v = e.target.closest("[data-view]");
+    if (v) { state.view = v.dataset.view; renderResults(); return; }
+    if (e.target.id === "dl-results") downloadResults();
+  });
+  $("retain").addEventListener("input", e => {
+    if (e.target.id === "retain-solution") state.retainSolution = e.target.value;
+    if (e.target.id === "retain-id") state.retainId = e.target.value;
+  });
+  $("retain").addEventListener("click", e => {
+    if (e.target.id === "retain-add") {
+      const solution = $("retain-solution").value.trim();
+      if (!solution) { setStatus($("retain-status"), "Enter the confirmed solution first.", "err"); return; }
+      const idVal = $("retain-id") ? $("retain-id").value.trim() : null;
+      const q = {};
+      for (const c of state.criteria) if (state.config[c].weight > 0) q[c] = state.query[c];
+      state.rows = C.appendCase(state.rows, state.columns, q, state.solutionCol, solution, state.idCol, idVal);
+      state.removeArmed = false; state.retainSolution = null; state.retainId = null;
+      renderBank(); update();
+      setStatus($("retain-status"), `Added as case ${idVal || state.rows.length}. It now takes part in every search.`, "ok");
+    } else if (e.target.id === "dl-bank") {
+      downloadBank();
+    } else if (e.target.id === "retain-remove") {
+      if (!state.removeArmed) { state.removeArmed = true; renderRetain(); return; }
+      state.rows = state.original.map(r => ({ ...r })); state.removeArmed = false;
+      renderBank(); update();
+      setStatus($("retain-status"), "Removed the added cases.", "ok");
+    }
+  });
+
+  loadSample("tourism");
+})();
+</script>
